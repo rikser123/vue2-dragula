@@ -169,7 +169,7 @@ export default function (Vue, options = {}) {
 
     on(name, handlerConfig = {}) {
       logServiceConfig('on', name, handlerConfig)
-      if (typeof name === 'object') {
+      if (name instanceof Object) {
         handlerConfig = name
         // add event handlers for all services
         let serviceNames = this.serviceNames

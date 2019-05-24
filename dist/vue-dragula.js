@@ -1,6 +1,6 @@
 /*!
- * vue-dragula v2.5.3
- * (c) 2018 Yichang Liu
+ * vue-dragula v2.5.4
+ * (c) 2019 Yichang Liu
  * Released under the MIT License.
  */
 (function (global, factory) {
@@ -1119,20 +1119,6 @@ var require$$0$3 = Object.freeze({
 	  return call && (typeof call === "object" || typeof call === "function") ? call : self;
 	};
 
-	var raf = window.requestAnimationFrame;
-
-	function raffy(fn) {
-	  raf(function () {
-	    raf(fn);
-	  });
-	}
-
-	function winTimeout(fn) {
-	  window.setTimeout(fn, 50);
-	}
-
-	var waitForTransition = raf ? raffy : winTimeout;
-
 	function isObject(obj) {
 	  return obj === Object(obj);
 	}
@@ -1252,11 +1238,11 @@ var require$$0$3 = Object.freeze({
 	  }, {
 	    key: 'notCopy',
 	    value: function notCopy() {
-	      var _this = this;
-
-	      waitForTransition(function () {
-	        _this.sourceModel.removeAt(_this.dragIndex);
-	      });
+	      // This transition poses a problem in dropModel handlers - because if we try to use the model 
+	      // inside such a handler - the model has not been updated yet because of this waiting for transition 
+	      //waitForTransition(() => {
+	      this.sourceModel.removeAt(this.dragIndex);
+	      //})
 	    }
 
 	    /**
@@ -1294,6 +1280,11 @@ var require$$0$3 = Object.freeze({
 	      var notCopy = this.dragElm === dropElm;
 	      var targetModel = this.getModel(target);
 	      var dropElmModel = notCopy ? this.dropElmModel() : this.jsonDropElmModel();
+
+	      // we have to cancel the drop to prevent discrepancy between VirtualDOM and actual DOM
+	      // otherwise when we update the models and Vue tries to re-render it will be confused when not
+	      // finding the dragged node where Vue expects to find it
+	      this.drake.cancel(true);
 
 	      if (notCopy) {
 	        this.notCopy();
@@ -1655,7 +1646,7 @@ var require$$0$3 = Object.freeze({
 	        splicedModel: splicedModel,
 	        removedModel: removedModel
 	      });
-	      return splicedModel;
+	      return removedModel;
 	    }
 	  }, {
 	    key: 'insertAt',
@@ -2265,7 +2256,7 @@ var require$$0$3 = Object.freeze({
 	        var handlerConfig = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
 	        logServiceConfig('on', name, handlerConfig);
-	        if ((typeof name === 'undefined' ? 'undefined' : typeof name) === 'object') {
+	        if (name instanceof Object) {
 	          handlerConfig = name;
 	          // add event handlers for all services
 	          var serviceNames = this.serviceNames;
@@ -2352,16 +2343,19 @@ var require$$0$3 = Object.freeze({
 	  function calcNames(name, vnode, ctx) {
 	    var drakeName = vnode ? vnode.data.attrs.drake : this.params.drake;
 	    var serviceName = vnode ? vnode.data.attrs.service : this.params.service;
+	    var drakeOptions = vnode ? vnode.data.attrs.options : this.params.options;
 
 	    if (drakeName !== undefined && drakeName.length !== 0) {
 	      name = drakeName;
 	    }
 	    drakeName = isEmpty(drakeName) ? 'default' : drakeName;
+	    if (!drakeOptions) drakeOptions = {};
 
 	    return {
 	      name: name,
 	      drakeName: drakeName,
-	      serviceName: serviceName
+	      serviceName: serviceName,
+	      drakeOptions: drakeOptions
 	    };
 	  }
 
@@ -2437,7 +2431,7 @@ var require$$0$3 = Object.freeze({
 	  }
 
 	  Vue.directive('dragula', {
-	    params: ['drake', 'service'],
+	    params: ['drake', 'service', 'options'],
 
 	    bind: function bind(container, binding, vnode) {
 	      logDir('BIND', container, binding, vnode);
@@ -2445,7 +2439,8 @@ var require$$0$3 = Object.freeze({
 	      var _calcNames2 = calcNames(globalName, vnode, this),
 	          name = _calcNames2.name,
 	          drakeName = _calcNames2.drakeName,
-	          serviceName = _calcNames2.serviceName;
+	          serviceName = _calcNames2.serviceName,
+	          drakeOptions = _calcNames2.drakeOptions;
 
 	      var service = findService(name, vnode, serviceName);
 	      var drake = service.find(drakeName, vnode);
@@ -2470,9 +2465,8 @@ var require$$0$3 = Object.freeze({
 	        drake.containers.push(container);
 	        return;
 	      }
-	      var newDrake = dragula$1({
-	        containers: [container]
-	      });
+	      drakeOptions.containers = [container];
+	      var newDrake = dragula$1(drakeOptions);
 	      service.add(name, newDrake);
 
 	      service.handleModels(name, newDrake);
